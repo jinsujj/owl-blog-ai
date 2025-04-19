@@ -14,7 +14,7 @@ curl -X 'GET' 'https://ai.owl-dev.me/summarize/22' -H 'accept: */*'
 이 프로젝트는 `digit82/kobart-summarization` 모델을 Raspberry Pi 5 (ARMv8, 64bit) 환경에서 사용할 수 있도록 Docker 기반으로 구성한 FastAPI 요약 API 서버입니다.
 
 ## 📦 프로젝트 구조
-
+```
 llm/
 ├── Dockerfile                       # 도커 이미지 정의
 ├── docker-compose.yml              # 도커 컴포즈로 앱 실행 자동화
@@ -27,7 +27,7 @@ llm/
 ├── requirements.txt                # 필요한 Python 패키지 목록
 └── wheels/
     └── torch-1.13.1-...aarch64.whl # ARM64용 PyTorch 수동 설치 파일
-
+```
 
 ## 🐧 왜 이렇게 구성했을까?
 
