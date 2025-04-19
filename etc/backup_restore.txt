@@ -1,0 +1,3 @@
+cp patch/transformers/modeling_bart.py $(python -c "import transformers; print(transformers.__path__[0])")/models/bart/
+cp patch/transformers/modeling_utils.py $(python -c "import transformers; print(transformers.__path__[0])")/
+
