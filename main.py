@@ -68,7 +68,7 @@ def summarize_blog(blog_id):
 
         start_time = time.time()
         input_ids = tokenizer.encode(input_text, return_tensors="pt", truncation=True, max_length=1024)
-        summary_ids = model.generate(input_ids, num_beams=8, min_length=200)
+        summary_ids = model.generate(input_ids, num_beams=8, max_length=500, min_length=200)
         summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         elapsed_time = round(time.time() - start_time, 3)
 
