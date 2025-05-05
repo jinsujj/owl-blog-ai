@@ -39,5 +39,4 @@ shutil.copyfile('./patch/transformers/modeling_utils.py', transformers.__path__[
 EXPOSE 8000
 
 # FastAPI 서버 실행
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+CMD ["python", "main.py"]

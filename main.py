@@ -19,6 +19,7 @@ consumer = KafkaConsumer(
     auto_offset_reset="earliest",
     enable_auto_commit=True,
     group_id="summarizer",
+    max_poll_interval_ms=60000, #10 분
     value_deserializer=lambda m: json.loads(m.decode("utf-8"))
 )
 
@@ -67,7 +68,7 @@ def summarize_blog(blog_id):
 
         start_time = time.time()
         input_ids = tokenizer.encode(input_text, return_tensors="pt", truncation=True, max_length=1024)
-        summary_ids = model.generate(input_ids, num_beams=20, max_length=500, min_length=200)
+        summary_ids = model.generate(input_ids, num_beams=8, min_length=200)
         summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         elapsed_time = round(time.time() - start_time, 3)
 
@@ -113,5 +114,11 @@ if __name__ == "__main__":
     kafka_thread = threading.Thread(target=kafka_consumer_loop, daemon=True)
     kafka_thread.start()
 
-    # CLI 모드 실행
-    cli_mode()
+    # Docker 컨테이너에서는 CLI 모드 비활성화
+    import os
+    if os.environ.get("ENABLE_CLI", "false").lower() == "true":
+        cli_mode()
+    else:
+        # Kafka만 돌리고 컨테이너는 계속 살아 있게 유지
+        while True:
+            time.sleep(60)

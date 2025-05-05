@@ -56,7 +56,9 @@ llm/
 
 ```bash
 # 1. 도커 이미지 빌드 및 실행
+docker-compose build --no-cache
 docker-compose up --build
+
 
 # 2. 서버 확인
 curl https://ai.owl-dev.me           # Health Check
