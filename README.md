@@ -5,7 +5,9 @@ docker compose build --no-cache
 curl -X 'GET' 'https://ai.owl-dev.me/summarize/22' -H 'accept: */*'
 
 
-
+docker-compose down -v
+docker system prune -af
+docker-compose up --build
 
 
 
