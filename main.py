@@ -1,14 +1,16 @@
-from kafka import KafkaConsumer, KafkaProducer
-from transformers import PreTrainedTokenizerFast, BartForConditionalGeneration
 import json
 import time
+import threading
 import requests
 import re
 import html
 
-# 모델 및 토크나이저 초기화
-tokenizer = PreTrainedTokenizerFast.from_pretrained('digit82/kobart-summarization')
-model = BartForConditionalGeneration.from_pretrained('digit82/kobart-summarization')
+from kafka import KafkaConsumer, KafkaProducer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+tokenizer = AutoTokenizer.from_pretrained("lcw99/t5-base-korean-text-summary")
+model = AutoModelForSeq2SeqLM.from_pretrained("lcw99/t5-base-korean-text-summary")
+
 
 # Kafka 설정
 consumer = KafkaConsumer(
@@ -25,21 +27,12 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8")
 )
 
-def clean_html(text):
-    # 1. HTML 태그 제거
-    text = re.sub(r"<[^>]+>", "", text)
-    # 2. HTML 엔티티 디코딩 (예: &nbsp; → 공백)
-    text = html.unescape(text)
-    return text
-
 # Editor.js 블록 파서
 def parse_blocks(blocks):
     text_blocks = []
-
     for block in blocks:
         block_type = block.get("type")
         data = block.get("data", {})
-
         if block_type in ["paragraph", "header", "quote", "customHeader"]:
             text_blocks.append(str(data.get("text", "")))
         elif block_type in ["list", "checklist"]:
@@ -50,18 +43,12 @@ def parse_blocks(blocks):
             for row in data.get("content", []):
                 row_text = " | ".join(row)
                 text_blocks.append(row_text)
-
     return " ".join(text_blocks)
 
-# 블로그 요약 처리 루프
-print("📥 Kafka consumer started! Waiting for blog-summarize-request...")
-
-for message in consumer:
+# 블로그 요약 함수 (Kafka/CLI에서 공통 사용)
+def summarize_blog(blog_id):
     try:
-        blog_id = message.value.get("id")
-        print(f"🔍 Received request for blogId: {blog_id}")
-
-        # 블로그 API 요청
+        print(f"🔍 Processing blogId: {blog_id}")
         response = requests.get(f"https://backend.owl-dev.me/blogs/{blog_id}", timeout=10)
         response.raise_for_status()
 
@@ -71,18 +58,16 @@ for message in consumer:
 
         blocks = content_dict.get("blocks", [])
         full_text = parse_blocks(blocks).replace("\n", " ").strip()
-        cleaned_text = clean_html(full_text)
 
         if not full_text:
             print(f"⚠️ Blog {blog_id} 본문이 비어 있습니다.")
-            continue
-
-        print(cleaned_text)
-        print("====================")
+            return
+        
+        input_text = "summarize: 이 내용을 독자가 이해할 수 있도록 설명하듯 요약해줘. 내용: ..." + clean_html(full_text)
 
         start_time = time.time()
-        input_ids = tokenizer.encode(cleaned_text, return_tensors="pt", truncation=True, max_length=1024)
-        summary_ids = model.generate(input_ids, num_beams=18, max_length=200, min_length=80)
+        input_ids = tokenizer.encode(input_text, return_tensors="pt", truncation=True, max_length=1024)
+        summary_ids = model.generate(input_ids, num_beams=20, max_length=500, min_length=200)
         summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         elapsed_time = round(time.time() - start_time, 3)
 
@@ -92,10 +77,41 @@ for message in consumer:
             "elapsedTimeSec": elapsed_time
         }
 
-        # 결과 전송
+        # Kafka로 응답 전송
         producer.send("summary-response", result)
         print(f"✅ Published summary for blogId {blog_id} in {elapsed_time} sec")
+        print(f"\n📋 Summary:\n{summary}\n")
 
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
 
+def clean_html(text):
+    # 1. HTML 태그 제거
+    text = re.sub(r"<[^>]+>", "", text)
+    # 2. HTML 엔티티 디코딩 (예: &nbsp; → 공백)
+    text = html.unescape(text)
+    return text
+
+def kafka_consumer_loop():
+    print("📥 Kafka consumer started! Waiting for summary-request...")
+    for message in consumer:
+        blog_id = message.value.get("id")
+        summarize_blog(blog_id)
+
+def cli_mode():
+    while True:
+        blog_id = input("📝 요약할 blog_id를 입력하세요 (exit 입력 시 종료): ").strip()
+        if blog_id.lower() == "exit":
+            break
+        if blog_id.isdigit():
+            summarize_blog(int(blog_id))
+        else:
+            print("⚠️ 숫자 blog_id만 입력 가능합니다.")
+
+# 진입점
+if __name__ == "__main__":
+    kafka_thread = threading.Thread(target=kafka_consumer_loop, daemon=True)
+    kafka_thread.start()
+
+    # CLI 모드 실행
+    cli_mode()
