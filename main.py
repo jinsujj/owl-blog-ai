@@ -19,7 +19,7 @@ consumer = KafkaConsumer(
     auto_offset_reset="earliest",
     enable_auto_commit=True,
     group_id="summarizer",
-    max_poll_interval_ms=60000, #10 분
+    max_poll_interval_ms=360000, #10 분
     value_deserializer=lambda m: json.loads(m.decode("utf-8"))
 )
 
