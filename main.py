@@ -12,19 +12,8 @@ tokenizer = AutoTokenizer.from_pretrained("lcw99/t5-base-korean-text-summary")
 model = AutoModelForSeq2SeqLM.from_pretrained("lcw99/t5-base-korean-text-summary")
 
 
-# Kafka 설정
-consumer = KafkaConsumer(
-    "summary-request",
-    bootstrap_servers="kafka:9092",
-    auto_offset_reset="earliest",
-    enable_auto_commit=True,
-    group_id="summarizer",
-    max_poll_interval_ms=360000, #10 분
-    value_deserializer=lambda m: json.loads(m.decode("utf-8"))
-)
-
 producer = KafkaProducer(
-    bootstrap_servers="kafka:9092",
+    bootstrap_servers="kafka:29092",
     value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8")
 )
 
@@ -93,11 +82,34 @@ def clean_html(text):
     text = html.unescape(text)
     return text
 
+
 def kafka_consumer_loop():
     print("📥 Kafka consumer started! Waiting for summary-request...")
-    for message in consumer:
-        blog_id = message.value.get("id")
-        summarize_blog(blog_id)
+
+    consumer = KafkaConsumer(
+        "summary-request",
+        bootstrap_servers="kafka:29092",
+        auto_offset_reset="earliest",
+        enable_auto_commit=False,
+        group_id="summarizer",
+        max_poll_interval_ms=600000,
+        value_deserializer=lambda m: json.loads(m.decode("utf-8"))
+    )
+
+    try:
+        while True:
+            records = consumer.poll(timeout_ms=1000)  # 1초마다 poll
+            for topic_partition, messages in records.items():
+                for message in messages:
+                    blog_id = message.value.get("id")
+                    threading.Thread(target=summarize_blog, args=(blog_id,)).start()
+                    consumer.commit()
+    except KafkaError as e:
+        print(f"❌ Kafka 소비 중 오류: {e}")
+    finally:
+        consumer.close()
+
+
 
 def cli_mode():
     while True:
